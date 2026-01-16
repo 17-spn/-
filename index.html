@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>InSAR 年会竞速抢答 (最终融合版)</title>
+    <title>InSAR 年会竞速抢答 (白金稳定版)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
@@ -84,6 +84,9 @@
 
         /* 底部控制栏提示 */
         .controls-hint { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); color: #64748b; font-size: 0.9rem; pointer-events: none; }
+        
+        /* 调试流 */
+        #debug-stream { position: fixed; bottom: 0; left:0; width: 100%; height: 20px; font-size: 10px; color: #444; background: rgba(0,0,0,0.2); pointer-events: none; overflow: hidden; white-space: nowrap; z-index: 1; }
     </style>
 </head>
 <body>
@@ -94,6 +97,8 @@
         <span style="margin: 0 10px; opacity: 0.3;">|</span>
         <span>房间: <span id="room-disp">8888</span></span>
     </div>
+    
+    <div id="debug-stream">...</div>
 
     <div id="view-dash" class="hidden">
         <h1 style="font-size: 2.5rem; margin-bottom: 10px;">🛰️ InSAR 抢答总控台</h1>
@@ -158,10 +163,10 @@
 
 <script>
     /* =========================================
-       1. 强制稳定配置 (核弹级稳健参数)
+       1. 强制稳定配置 (您验证过能连上的配置)
        ========================================= */
-    const ROOM_ID = '8888'; // 房间号写死，绝对不乱变
-    const BROKER_URL = 'wss://broker.hivemq.com:8000/mqtt'; // 使用 HiveMQ，通常更稳
+    const ROOM_ID = '8888'; // 房间号写死，确保刷新不断连
+    const BROKER_URL = 'wss://broker.emqx.io:8084/mqtt'; // 使用您验证成功的 EMQX
     const TOPIC_SUBMIT = `insar/${ROOM_ID}/data`; 
 
     // 完整的10道题目
@@ -215,15 +220,19 @@
 
         mqttClient.on('error', (err) => {
             updateNetStatus(false);
-            console.error(err);
+            document.getElementById('debug-stream').innerText = "Err: " + err;
         });
         
         mqttClient.on('offline', () => updateNetStatus(false));
 
         mqttClient.on('message', (topic, message) => {
+            // 调试流显示，方便您确认数据到了
+            const raw = message.toString();
+            document.getElementById('debug-stream').innerText = `Recv: ${raw}`;
+
             if (topic === TOPIC_SUBMIT && mode === 'screen') {
                 try {
-                    const data = JSON.parse(message.toString());
+                    const data = JSON.parse(raw);
                     handleSubmission(data);
                 } catch (e) {}
             }
@@ -352,9 +361,8 @@
     }
 
     function handleSubmission(data) {
-        // 🚑 核心逻辑修正：
-        // 只要题目ID对，就收录，不管大屏现在的 screenState 是什么
-        // 这样可以防止网络延迟导致的“漏收”
+        // 🚑 白金稳定版逻辑：
+        // 只要题目ID对，就收录！(移除了 screenState 检查，防止因网络延迟被拦截)
         if (data.q != currentQIdx) return;
         
         // 去重
