@@ -2,261 +2,431 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InSAR 年会知识抢答系统 (2分钟版)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>InSAR 年会竞速抢答系统</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    
     <style>
-        :root {
-            --bg: #0f172a;
-            --card: #1e293b;
-            --primary: #38bdf8;
-            --accent: #f472b6;
-            --text: #f8fafc;
-        }
-        body { margin: 0; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); overflow-x: hidden; }
+        :root { --bg: #0f172a; --card: #1e293b; --primary: #06b6d4; --accent: #f43f5e; --text: #f8fafc; --green: #10b981; }
+        body { margin: 0; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); overflow: hidden; touch-action: manipulation; }
         
-        /* 通用样式 */
+        /* 通用类 */
         .hidden { display: none !important; }
-        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        .btn-primary { background: var(--primary); color: #000; }
-        .btn-primary:hover { filter: brightness(1.1); }
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 1rem; }
+        .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 0 15px rgba(6, 182, 212, 0.4); }
+        .btn-primary:active { transform: scale(0.95); }
         
-        /* === 视图 1: 总控仪表盘 (Dashboard) === */
-        #view-dashboard { padding: 40px; text-align: center; }
-        .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto; }
-        .card { background: var(--card); padding: 20px; border-radius: 15px; border: 1px solid #334155; transition: transform 0.2s; }
-        .card:hover { transform: translateY(-5px); border-color: var(--primary); }
-        .card h3 { color: var(--primary); margin-top: 0; }
-        .mini-qr { margin: 15px auto; background: white; padding: 10px; width: 120px; height: 120px; border-radius: 8px; }
-        
-        /* === 视图 2: 大屏展示端 (Screen) === */
-        #view-screen { height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
-        .screen-content { text-align: center; width: 80%; max-width: 1000px; z-index: 2; }
-        .q-tag { background: var(--accent); color: white; padding: 5px 15px; border-radius: 20px; font-size: 1.2rem; margin-bottom: 20px; display: inline-block; }
-        .q-text { font-size: 2.5rem; font-weight: bold; line-height: 1.4; margin-bottom: 40px; text-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        
-        /* 二维码弹窗 */
-        .qr-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
-        .big-qr { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 0 50px var(--primary); }
-        
-        /* 选项显示 */
-        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; text-align: left; }
-        .option-box { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; font-size: 1.5rem; border: 2px solid transparent; }
-        .option-box.correct { background: #22c55e; color: black; font-weight: bold; border-color: #86efac; box-shadow: 0 0 30px #22c55e; }
-        
-        /* === 视图 3: 手机答题端 (Mobile) === */
-        #view-mobile { padding: 20px; min-height: 100vh; background: #000; text-align: center; }
-        .m-header { font-size: 1.2rem; color: var(--primary); margin-bottom: 20px; }
-        .m-q-text { font-size: 1.2rem; margin-bottom: 30px; line-height: 1.5; }
-        .m-btn { display: block; width: 100%; padding: 15px; margin-bottom: 15px; background: #334155; border: none; color: white; border-radius: 10px; font-size: 1.1rem; }
-        .m-btn:active { background: var(--primary); color: black; }
-        .m-btn.selected { background: var(--primary); color: black; border: 2px solid white; }
+        /* === 视图: 总控台 === */
+        #view-dashboard { padding: 40px; text-align: center; overflow-y: auto; height: 100vh; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; max-width: 1000px; margin: 0 auto; }
+        .card { background: var(--card); padding: 15px; border-radius: 10px; border: 1px solid #334155; cursor: pointer; }
+        .card:hover { border-color: var(--primary); background: #263344; }
 
-        /* 动画 */
-        .fade-in { animation: fadeIn 0.5s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        /* === 视图: 大屏端 === */
+        #view-screen { height: 100vh; display: flex; flex-direction: column; align-items: center; position: relative; padding-top: 40px; }
+        .q-title { font-size: 2.5rem; font-weight: bold; text-align: center; margin-bottom: 20px; max-width: 90%; text-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        
+        /* 选项显示 (大屏) */
+        .screen-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 80%; margin-top: 20px; }
+        .s-opt { background: rgba(255,255,255,0.05); padding: 20px; font-size: 1.5rem; border-radius: 10px; border: 2px solid transparent; }
+        .s-opt.correct { background: var(--green); color: black; border-color: #fff; box-shadow: 0 0 30px var(--green); animation: pulse 1s infinite; }
+
+        /* 二维码遮罩 */
+        .qr-layer { position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(15, 23, 42, 0.98); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .timer-big { font-size: 8rem; font-weight: 900; color: var(--primary); font-family: monospace; text-shadow: 0 0 40px var(--primary); }
+        .join-count { font-size: 1.5rem; margin-top: 20px; color: #94a3b8; }
+        
+        /* 排行榜 */
+        .rank-board { position: absolute; right: 20px; top: 100px; width: 300px; background: rgba(0,0,0,0.5); border-radius: 15px; padding: 15px; border: 1px solid #334155; }
+        .rank-title { text-align: center; color: var(--accent); font-weight: bold; margin-bottom: 10px; font-size: 1.2rem; }
+        .rank-list { list-style: none; padding: 0; margin: 0; }
+        .rank-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 1.1rem; }
+        .rank-item:first-child { color: #ffd700; font-weight: bold; font-size: 1.3rem; } /* 金牌 */
+        .rank-item:nth-child(2) { color: #c0c0c0; } /* 银牌 */
+        .rank-item:nth-child(3) { color: #cd7f32; } /* 铜牌 */
+
+        /* === 视图: 手机端 === */
+        #view-mobile { padding: 20px; min-height: 100vh; background: #0f172a; display: flex; flex-direction: column; }
+        .input-group { margin-bottom: 30px; text-align: center; }
+        .name-input { width: 80%; padding: 15px; font-size: 1.2rem; border-radius: 8px; border: none; text-align: center; outline: none; margin-bottom: 15px; }
+        .m-opts { display: flex; flex-direction: column; gap: 15px; }
+        .m-btn { padding: 18px; background: #334155; border: 2px solid #475569; color: white; border-radius: 12px; font-size: 1.1rem; text-align: left; }
+        .m-btn.selected { background: var(--primary); border-color: white; color: black; }
+        .m-status { text-align: center; margin-top: 30px; font-size: 1.2rem; font-weight: bold; color: var(--green); }
+
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
     </style>
 </head>
 <body>
 
     <div id="view-dashboard" class="hidden">
-        <h1 style="font-size: 3rem; margin-bottom: 40px;">🛰️ InSAR 知识抢答总控台</h1>
-        <p style="color: #94a3b8; margin-bottom: 40px;">点击卡片进入大屏模式，或直接让选手扫描下方二维码练习</p>
-        <div class="grid-container" id="dash-grid"></div>
+        <h1 style="color: var(--primary);">🛰️ InSAR 竞速抢答总控</h1>
+        <div style="margin-bottom: 20px; font-size: 0.9rem; color: #64748b;">
+            本系统使用公共MQTT服务通信，请确保网络通畅<br>
+            房间号: <span id="room-id-disp" style="color:white; font-weight:bold;"></span>
+        </div>
+        <div class="grid" id="dash-grid"></div>
     </div>
 
     <div id="view-screen" class="hidden">
-        <div style="position: absolute; top: 20px; left: 20px; opacity: 0.5;">
-            <button class="btn" onclick="goHome()">🏠 返回总控</button>
+        <div style="position: absolute; top:10px; left:10px; opacity:0.3;">
+            <button onclick="goHome()">🏠</button>
         </div>
 
-        <div class="screen-content fade-in">
-            <div class="q-tag" id="s-index">Q1</div>
-            <div class="q-text" id="s-text">题目加载中...</div>
-            
-            <div class="options-grid hidden" id="s-options">
-                </div>
+        <div class="q-title" id="s-text">题目加载中...</div>
+
+        <div class="rank-board">
+            <div class="rank-title">🏆 实时极速榜</div>
+            <ul class="rank-list" id="rank-list">
+                <li style="text-align:center; color:#666; font-size:0.9rem;">暂无答题数据</li>
+            </ul>
         </div>
 
-        <div id="s-qr-layer" class="qr-overlay hidden">
-            <h2 style="font-size: 3rem; margin-bottom: 20px; color: white;">请扫描二维码抢答</h2>
-            <div id="s-qr-code" class="big-qr"></div>
-            <div style="margin-top: 30px; font-size: 2rem; color: var(--primary); font-weight: bold;">
-                ⏳ 倒计时: <span id="s-timer">120</span>s
+        <div class="screen-opts hidden" id="s-opts-area"></div>
+
+        <div id="qr-layer" class="qr-layer hidden">
+            <h2 style="color:white; margin-bottom:10px;">输入名字 · 极速抢答</h2>
+            <div style="background:white; padding:15px; border-radius:10px;">
+                <div id="qrcode"></div>
             </div>
-            <div style="margin-top: 20px; color: #94a3b8; font-size: 1.2rem;">按 [空格键] 结束抢答并看答案</div>
+            <div class="timer-big" id="timer">120</div>
+            <div class="join-count">已收到 <span id="ans-count" style="color:var(--primary); font-weight:bold;">0</span> 份答案</div>
+            <div style="margin-top:20px; color:#64748b;">按 [空格] 结束并看答案</div>
         </div>
 
-        <div style="position: absolute; bottom: 20px; color: #64748b;">
-            [空格] 流程控制：出题 -> 二维码 -> 开奖 | [Esc] 返回
-        </div>
+        <div style="position:absolute; bottom:20px; color:#475569;">[空格] 控制流程</div>
     </div>
 
     <div id="view-mobile" class="hidden">
-        <div class="m-header" id="m-index">第 1 题</div>
-        <div class="m-q-text" id="m-text">题目...</div>
-        <div id="m-options"></div>
-        <div id="m-status" style="margin-top: 30px; color: #4ade80; font-weight: bold;"></div>
+        <div id="m-login">
+            <h2 style="text-align:center; margin-top:50px;">👋 欢迎参加抢答</h2>
+            <div class="input-group">
+                <input type="text" id="username" class="name-input" placeholder="请输入你的名字/昵称" maxlength="8">
+                <button class="btn btn-primary" onclick="mobileLogin()" style="width:85%">进入考场</button>
+            </div>
+        </div>
+
+        <div id="m-quiz" class="hidden">
+            <div style="display:flex; justify-content:space-between; margin-bottom:20px; color:#94a3b8;">
+                <span id="m-user-disp"></span>
+                <span id="m-q-idx">Q1</span>
+            </div>
+            <div id="m-q-text" style="font-size:1.1rem; margin-bottom:30px; line-height:1.4;"></div>
+            <div class="m-opts" id="m-opts-area"></div>
+            <div id="m-status" class="m-status hidden"></div>
+        </div>
     </div>
 
 <script>
-    // === 题库数据 ===
+    // ================= 配置与数据 =================
+    // 为了避免串台，生成一个随机的房间ID（基于时间戳）
+    let ROOM_ID = localStorage.getItem('insar_room_id');
+    if(!ROOM_ID) {
+        ROOM_ID = 'insar_' + Math.floor(Math.random() * 10000);
+        localStorage.setItem('insar_room_id', ROOM_ID);
+    }
+    
+    // MQTT 公共服务器 (免费、免配置)
+    const MQTT_BROKER = 'wss://broker.emqx.io:8084/mqtt';
+    const TOPIC_SUBMIT = `quiz/${ROOM_ID}/submit`; // 手机提交答案
+    const TOPIC_STATE  = `quiz/${ROOM_ID}/state`;  // 大屏广播状态
+
     const questions = [
-        { q: "在 SNAP、SARscape 等软件进行干涉处理时，第一步通常是对两景 SAR 影像进行什么操作？", a: ["相位解缠", "配准 (Coregistration)", "去平地效应", "地理编码"], c: 1 },
-        { q: "在处理 InSAR 条纹图噪声时，最著名的 Goldstein 滤波算法主要是在哪个域进行操作的？", a: ["时域", "频域 (Frequency Domain)", "空间域", "色彩域"], c: 1 },
-        { q: "在 GAMMA 或 SARscape 中进行相位解缠 (Unwrapping) 时，最经典且常用的算法模型是？", a: ["MCF (最小费用流)", "KNN (K-近邻)", "SVM (支持向量机)", "RGB 色彩平衡"], c: 0 },
-        { q: "在 D-InSAR（双轨法）流程中，我们必须导入外部 DEM (数字高程模型)，其核心作用是？", a: ["模拟并去除地形相位", "计算卫星轨道高度", "美化输出结果", "去除大气误差"], c: 0 },
-        { q: "在使用软件处理 Sentinel-1 数据时，由于其独特的成像模式，必须进行哪项特殊的预处理步骤？", a: ["Deburst (去突发/拼接)", "De-noise (去噪)", "Sharpen (锐化)", "Crop (裁剪)"], c: 0 },
-        { q: "当我们在软件中得到视线向（LOS）形变后，若要结合升降轨数据解算垂直和东西向形变，主要利用了升降轨的什么差异？", a: ["波长不同", "飞行方向和入射角几何差异", "卫星品牌不同", "成像时间不同"], c: 1 },
-        { q: "当形变过大（如强震）导致干涉条纹过密无法解缠时，软件中通常改用什么技术来提取形变？", a: ["Offset-tracking (偏移量追踪)", "PS-InSAR", "SBAS-InSAR", "极化分解"], c: 0 },
-        { q: "SBAS 处理流程的最后阶段，为了去除大气相位（APS），软件通常利用了大气在空间和时间上的什么特性？", a: ["空间高频，时间低频", "空间低频，时间高频", "完全随机噪声", "空间时间都是常数"], c: 1 },
-        { q: "SBAS-InSAR 技术的核心策略是构建“小基线集”网络，最根本的物理目的是为了最大限度地抑制哪两种失相干现象？", a: ["大气与电离层失相干", "空间与时间失相干", "地形与平地失相干", "多普勒与热噪声"], c: 1 },
-        { q: "Stacking-InSAR 通过加权平均估算形变速率，这一操作有效的前提是假设大气相位误差在时间域上符合什么统计特征？", a: ["随时间线性增长", "随机分布且均值为零", "呈季节性周期变化", "与地形高度严格相关"], c: 1 }
+        { q: "在 SNAP 软件处理干涉时，第一步通常是对两景影像进行什么操作？", a: ["相位解缠", "配准 (Coregistration)", "去平地效应", "地理编码"], c: 1 },
+        { q: "Goldstein 滤波算法主要是在哪个域进行操作的？", a: ["时域", "频域 (Frequency Domain)", "空间域", "色彩域"], c: 1 },
+        { q: "GAMMA 或 SARscape 中进行相位解缠，最经典的算法是？", a: ["MCF (最小费用流)", "KNN (K-近邻)", "SVM (支持向量机)", "RGB色彩平衡"], c: 0 },
+        { q: "D-InSAR 流程中导入外部 DEM 的核心作用是？", a: ["模拟并去除地形相位", "计算轨道高度", "美化结果", "去除大气误差"], c: 0 },
+        { q: "Sentinel-1 独特的 TOPS 模式必须进行哪项预处理？", a: ["Deburst (去突发)", "De-noise", "Sharpen", "Crop"], c: 0 },
+        { q: "结合升降轨解算三维形变，主要利用了升降轨的什么差异？", a: ["波长不同", "飞行方向/入射角几何差异", "卫星品牌", "时间不同"], c: 1 },
+        { q: "形变过大导致条纹过密无法解缠时，应改用什么技术？", a: ["Offset-tracking (偏移量追踪)", "PS-InSAR", "SBAS-InSAR", "极化分解"], c: 0 },
+        { q: "SBAS 去除大气相位，利用了大气在时空上的什么特性？", a: ["空间高频，时间低频", "空间低频，时间高频", "随机噪声", "常数"], c: 1 },
+        { q: "SBAS-InSAR 构建“小基线集”是为了抑制哪两种失相干？", a: ["大气/电离层", "空间/时间失相干", "地形/平地", "热噪声"], c: 1 },
+        { q: "Stacking-InSAR 假设大气相位误差在时间域上符合什么特征？", a: ["线性增长", "随机且均值为零", "周期变化", "与地形相关"], c: 1 }
     ];
 
-    // === 核心逻辑 ===
-    const urlParams = new URLSearchParams(window.location.search);
-    const mode = urlParams.get('mode') || 'dashboard'; // dashboard, screen, mobile
-    const qId = parseInt(urlParams.get('q')) || 0;
+    // 全局变量
+    let mqttClient;
+    let currentMode = 'dashboard';
+    let currentQId = 0;
+    let startTime = 0; // 大屏开始计时的时刻
+    let answersMap = {}; // 存储当前题目的所有答案 {name: {ans:0, time:123}}
 
-    // 获取基础URL
+    // ================= 初始化 =================
+    const urlParams = new URLSearchParams(window.location.search);
+    const mode = urlParams.get('mode');
+    const qId = parseInt(urlParams.get('q')) || 0;
     const baseUrl = window.location.origin + window.location.pathname;
 
-    window.onload = function() {
+    window.onload = () => {
+        initMQTT();
         if (mode === 'mobile') initMobile();
         else if (mode === 'screen') initScreen();
         else initDashboard();
     };
 
-    // --- 1. 仪表盘逻辑 ---
+    // 建立 MQTT 连接
+    function initMQTT() {
+        mqttClient = mqtt.connect(MQTT_BROKER);
+        
+        mqttClient.on('connect', () => {
+            console.log('MQTT Connected via ' + ROOM_ID);
+            // 所有人订阅大屏状态
+            mqttClient.subscribe(TOPIC_STATE);
+            
+            // 如果是大屏，订阅提交频道
+            if (mode === 'screen') {
+                mqttClient.subscribe(TOPIC_SUBMIT);
+            }
+        });
+
+        mqttClient.on('message', (topic, message) => {
+            const msg = JSON.parse(message.toString());
+            
+            if (topic === TOPIC_SUBMIT && mode === 'screen') {
+                handleSubmission(msg);
+            }
+        });
+    }
+
+    // ================= 视图 1: 总控台 =================
     function initDashboard() {
         document.getElementById('view-dashboard').classList.remove('hidden');
+        document.getElementById('room-id-disp').innerText = ROOM_ID;
         const grid = document.getElementById('dash-grid');
         
         questions.forEach((q, idx) => {
             const card = document.createElement('div');
             card.className = 'card';
-            
-            const mobileUrl = `${baseUrl}?mode=mobile&q=${idx}`;
-            
             card.innerHTML = `
-                <h3>第 ${idx + 1} 题</h3>
-                <div style="font-size:0.9rem; height:50px; overflow:hidden; margin-bottom:10px;">${q.q}</div>
-                <div id="dash-qr-${idx}" class="mini-qr"></div>
-                <button class="btn btn-primary" style="width:100%" onclick="openScreen(${idx})">📺 开启大屏</button>
-                <div style="margin-top:10px; font-size:0.8rem; color:#64748b;">手机入口</div>
+                <h3 style="color:var(--primary); margin-top:0;">第 ${idx+1} 题</h3>
+                <div style="font-size:0.8rem; height:40px; overflow:hidden;">${q.q}</div>
+                <div style="margin-top:10px; color:#94a3b8; font-size:0.8rem;">点击开启</div>
             `;
+            card.onclick = () => window.location.href = `${baseUrl}?mode=screen&q=${idx}`;
             grid.appendChild(card);
-            
-            new QRCode(document.getElementById(`dash-qr-${idx}`), {
-                text: mobileUrl, width: 100, height: 100
-            });
         });
     }
 
-    function openScreen(idx) {
-        window.location.href = `${baseUrl}?mode=screen&q=${idx}`;
-    }
+    // ================= 视图 2: 大屏端 =================
+    let screenState = 0; // 0=读题, 1=抢答中, 2=公布
+    let timerInt;
 
-    // --- 2. 大屏逻辑 ---
-    let screenState = 0; // 0=读题, 1=二维码, 2=答案
     function initScreen() {
         document.getElementById('view-screen').classList.remove('hidden');
+        currentQId = qId;
         const q = questions[qId];
-        
-        document.getElementById('s-index').innerText = `第 ${qId + 1} / ${questions.length} 题`;
+
+        // 渲染题目
         document.getElementById('s-text').innerText = q.q;
         
-        const optContainer = document.getElementById('s-options');
-        const letters = ['A', 'B', 'C', 'D'];
+        // 渲染选项（初始隐藏）
+        const optArea = document.getElementById('s-opts-area');
+        const chars = ['A', 'B', 'C', 'D'];
         q.a.forEach((opt, i) => {
-            const div = document.createElement('div');
-            div.className = 'option-box';
-            div.id = `opt-${i}`;
-            div.innerText = `${letters[i]}. ${opt}`;
-            optContainer.appendChild(div);
+            const d = document.createElement('div');
+            d.className = 's-opt';
+            d.id = `s-opt-${i}`;
+            d.innerText = `${chars[i]}. ${opt}`;
+            optArea.appendChild(d);
         });
 
+        // 监听空格
         document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space') nextScreenState();
-            if (e.code === 'Escape') goHome();
+            if(e.code === 'Space') nextScreenStep();
         });
     }
 
-    function nextScreenState() {
-        const qrLayer = document.getElementById('s-qr-layer');
-        const optContainer = document.getElementById('s-options');
-        
+    function nextScreenStep() {
+        const qrLayer = document.getElementById('qr-layer');
+        const optArea = document.getElementById('s-opts-area');
+
         if (screenState === 0) {
-            // 状态0 -> 1: 显示二维码
+            // ---> 进入抢答阶段
             screenState = 1;
+            answersMap = {}; // 清空上一题数据
+            updateRankBoard(); // 清空榜单
+            document.getElementById('ans-count').innerText = "0";
+            
             qrLayer.classList.remove('hidden');
-            const mobileUrl = `${baseUrl}?mode=mobile&q=${qId}`;
-            document.getElementById('s-qr-code').innerHTML = "";
-            new QRCode(document.getElementById('s-qr-code'), {
+            optArea.classList.add('hidden');
+            
+            // 生成二维码
+            const mobileUrl = `${baseUrl}?mode=mobile&q=${currentQId}&room=${ROOM_ID}`;
+            document.getElementById('qrcode').innerHTML = "";
+            new QRCode(document.getElementById('qrcode'), {
                 text: mobileUrl, width: 250, height: 250
             });
-            startTimer();
+
+            // 开始倒计时
+            let t = 120;
+            startTime = Date.now(); // 记录开始时间用于计算排名
+            document.getElementById('timer').innerText = t;
+            
+            // 广播开始信号给手机 (防止提前抢答)
+            /* 简单起见，这里不强制锁手机，手机端根据进入时间判断 */
+            
+            timerInt = setInterval(() => {
+                t--;
+                document.getElementById('timer').innerText = t;
+                if(t<=0) nextScreenStep();
+            }, 1000);
+
         } else if (screenState === 1) {
-            // 状态1 -> 2: 隐藏二维码，显示选项和答案
+            // ---> 公布答案
             screenState = 2;
+            clearInterval(timerInt);
             qrLayer.classList.add('hidden');
-            optContainer.classList.remove('hidden');
-            const correctIdx = questions[qId].c;
-            document.getElementById(`opt-${correctIdx}`).classList.add('correct');
+            optArea.classList.remove('hidden');
+
+            // 高亮正确答案
+            const correctIdx = questions[currentQId].c;
+            document.getElementById(`s-opt-${correctIdx}`).classList.add('correct');
+
         } else if (screenState === 2) {
-            // 状态2 -> 下一题
-            if(qId < questions.length - 1) {
-                window.location.href = `${baseUrl}?mode=screen&q=${qId + 1}`;
+            // ---> 下一题
+            if (currentQId < questions.length - 1) {
+                window.location.href = `${baseUrl}?mode=screen&q=${currentQId + 1}`;
             } else {
-                alert('所有题目已结束！');
+                alert("比赛结束！");
                 goHome();
             }
         }
     }
 
-    function startTimer() {
-        let t = 120; // 改为120秒
-        const el = document.getElementById('s-timer');
-        el.innerText = t; // 初始化显示
-        
-        const timerInt = setInterval(() => {
-            if (screenState !== 1) { clearInterval(timerInt); return; }
-            t--;
-            el.innerText = t;
-            if (t <= 0) nextScreenState(); // 自动结束
-        }, 1000);
+    // 处理收到的答案
+    function handleSubmission(data) {
+        // data = { name: "张三", ans: 1, q: 0 }
+        if (data.q !== currentQId) return; // 题目不匹配
+        if (screenState !== 1) return; // 不在抢答时间
+
+        // 如果这个人没答过，记录下来
+        if (!answersMap[data.name]) {
+            const timeUsed = (Date.now() - startTime) / 1000; // 用时秒
+            answersMap[data.name] = {
+                ans: data.ans,
+                time: timeUsed.toFixed(2)
+            };
+            
+            // 更新UI计数
+            document.getElementById('ans-count').innerText = Object.keys(answersMap).length;
+            
+            // 实时刷新排行榜
+            updateRankBoard();
+        }
     }
 
-    // --- 3. 手机端逻辑 ---
-    function initMobile() {
-        document.getElementById('view-mobile').classList.remove('hidden');
-        const q = questions[qId];
+    function updateRankBoard() {
+        const list = document.getElementById('rank-list');
+        list.innerHTML = "";
         
-        document.getElementById('m-index').innerText = `抢答第 ${qId + 1} 题`;
-        document.getElementById('m-text').innerText = q.q;
+        const correctIdx = questions[currentQId].c;
         
-        const container = document.getElementById('m-options');
-        const letters = ['A', 'B', 'C', 'D'];
-        
-        q.a.forEach((opt, i) => {
-            const btn = document.createElement('button');
-            btn.className = 'm-btn';
-            btn.innerText = `${letters[i]}. ${opt.split(' ')[0]}`;
-            btn.onclick = () => submitAnswer(i, btn);
-            container.appendChild(btn);
+        // 转换为数组并排序
+        // 规则：答对优先，然后按时间排序
+        const sorted = Object.entries(answersMap)
+            .filter(([name, val]) => val.ans === correctIdx) // 只显示答对的
+            .sort((a, b) => a[1].time - b[1].time) // 时间越短越前
+            .slice(0, 5); // 取前5名
+
+        if (sorted.length === 0) {
+            list.innerHTML = '<li style="text-align:center;color:#666">虚位以待...</li>';
+            return;
+        }
+
+        sorted.forEach(([name, val], idx) => {
+            const li = document.createElement('li');
+            li.className = 'rank-item animate__animated animate__fadeInRight';
+            li.innerHTML = `
+                <span>${idx+1}. ${name}</span>
+                <span>${val.time}s</span>
+            `;
+            list.appendChild(li);
         });
     }
 
-    function submitAnswer(idx, btnEl) {
+    // ================= 视图 3: 手机端 =================
+    function initMobile() {
+        document.getElementById('view-mobile').classList.remove('hidden');
+        // 检查是否有存储的用户名
+        const savedName = localStorage.getItem('insar_username');
+        if (savedName) {
+            document.getElementById('username').value = savedName;
+        }
+        
+        // 解析 URL 中的房间号，确保对上号
+        const urlRoom = new URLSearchParams(window.location.search).get('room');
+        if (urlRoom && urlRoom !== ROOM_ID) {
+            ROOM_ID = urlRoom; // 更新手机端的房间号
+            initMQTT(); // 重新连接正确的频道
+        }
+    }
+
+    function mobileLogin() {
+        const name = document.getElementById('username').value.trim();
+        if(!name) return alert("请先输入大名！");
+        
+        localStorage.setItem('insar_username', name);
+        document.getElementById('m-login').classList.add('hidden');
+        document.getElementById('m-quiz').classList.remove('hidden');
+        
+        renderMobileQuestion(name);
+    }
+
+    function renderMobileQuestion(name) {
+        document.getElementById('m-user-disp').innerText = `👤 ${name}`;
+        const q = questions[qId];
+        document.getElementById('m-q-text').innerText = q.q;
+
+        const optArea = document.getElementById('m-opts-area');
+        
+        // === 关键：选项乱序逻辑 ===
+        // 创建一个包含 {text, originalIndex} 的数组
+        let optsObj = q.a.map((txt, idx) => ({ text: txt, idx: idx }));
+        
+        // Fisher-Yates 洗牌算法
+        for (let i = optsObj.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [optsObj[i], optsObj[j]] = [optsObj[j], optsObj[i]];
+        }
+
+        // 渲染乱序后的按钮
+        optsObj.forEach(obj => {
+            const btn = document.createElement('button');
+            btn.className = 'm-btn';
+            // 手机端不显示 ABCD，只显示内容，防止报答案
+            // 或者显示内容
+            btn.innerText = obj.text;
+            btn.onclick = () => submitMobileAnswer(obj.idx, btn);
+            optArea.appendChild(btn);
+        });
+    }
+
+    function submitMobileAnswer(originalIdx, btn) {
+        const name = localStorage.getItem('insar_username');
+        
+        // 发送 MQTT 消息
+        const payload = JSON.stringify({
+            name: name,
+            ans: originalIdx,
+            q: qId
+        });
+        
+        mqttClient.publish(TOPIC_SUBMIT, payload);
+        
+        // UI 反馈
         const allBtns = document.querySelectorAll('.m-btn');
         allBtns.forEach(b => {
             b.disabled = true;
-            b.style.opacity = 0.5;
+            b.style.opacity = 0.6;
         });
-        btnEl.style.opacity = 1;
-        btnEl.classList.add('selected');
-        document.getElementById('m-status').innerText = "✅ 答案已提交，请看大屏！";
+        btn.classList.add('selected');
+        btn.style.opacity = 1;
+        
+        const status = document.getElementById('m-status');
+        status.innerText = "🚀 答案已飞向大屏！";
+        status.classList.remove('hidden');
     }
 
     function goHome() {
